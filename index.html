@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Grist Map Widget</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body, html {
+            height: 100%;
+            font-family: sans-serif;
+        }
+        
+        #map {
+            height: 100vh;
+            width: 100vw;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+    <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+    <script>
+        let map;
+        let marker;
+        let circle;
+        
+        // Default values
+        const defaults = {
+            lat: 48.8566,
+            lng: 2.3522,
+            radius: 1000
+        };
+        
+        function initializeMap() {
+            // Initialize map with default center
+            map = L.map('map').setView([defaults.lat, defaults.lng], 13);
+            
+            // Add tile layer
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(map);
+        }
+        
+        function updateMap(lat, lng, radius) {
+            // Validate inputs
+            if (!lat || !lng || isNaN(lat) || isNaN(lng)) {
+                console.log('Invalid coordinates:', lat, lng);
+                return;
+            }
+            
+            // Use default radius if not provided or invalid
+            if (!radius || isNaN(radius) || radius <= 0) {
+                radius = defaults.radius;
+            }
+            
+            // Remove existing marker and circle
+            if (marker) map.removeLayer(marker);
+            if (circle) map.removeLayer(circle);
+            
+            // Add new marker
+            marker = L.marker([lat, lng]).addTo(map);
+            
+            // Add circle
+            circle = L.circle([lat, lng], {
+                color: '#3388ff',
+                fillColor: '#3388ff',
+                fillOpacity: 0.2,
+                weight: 2,
+                radius: radius
+            }).addTo(map);
+            
+            // Fit map to circle bounds
+            const bounds = circle.getBounds();
+            map.fitBounds(bounds, { padding: [20, 20] });
+        }
+        
+        // Initialize Grist plugin
+        grist.ready({
+            columns: [
+                { name: 'lat', title: 'Latitude', type: 'Numeric' },
+                { name: 'lng', title: 'Longitude', type: 'Numeric' },
+                { name: 'radius', title: 'Radius (meters)', type: 'Numeric', optional: true }
+            ],
+            requiredAccess: 'read table'
+        });
+        
+        // Handle data updates from Grist
+        grist.onRecord(function(record, mappings) {
+            if (!record || !mappings) {
+                console.log('No record or mappings available');
+                return;
+            }
+            
+            const lat = record[mappings.lat];
+            const lng = record[mappings.lng];
+            const radius = record[mappings.radius];
+            
+            console.log('Received data:', { lat, lng, radius });
+            updateMap(lat, lng, radius);
+        });
+        
+        // Handle multiple records (show first valid one)
+        grist.onRecords(function(records, mappings) {
+            if (!records || !mappings || records.length === 0) {
+                console.log('No records available');
+                return;
+            }
+            
+            // Find first record with valid coordinates
+            for (const record of records) {
+                const lat = record[mappings.lat];
+                const lng = record[mappings.lng];
+                const radius = record[mappings.radius];
+                
+                if (lat && lng && !isNaN(lat) && !isNaN(lng)) {
+                    console.log('Using first valid record:', { lat, lng, radius });
+                    updateMap(lat, lng, radius);
+                    break;
+                }
+            }
+        });
+        
+        // Initialize map when page loads
+        document.addEventListener('DOMContentLoaded', initializeMap);
+    </script>
+</body>
+</html>
